@@ -41,6 +41,8 @@ cd -
 sudo chmod 777 /dev/ch34x_pis*
 ```
 
+for udev users read the ch341par_linux/README.md
+
 #### Install python pre-requisites
 ```
 sudo apt-get install python3 python3-tk python3-pil.imagetk python3-wget
