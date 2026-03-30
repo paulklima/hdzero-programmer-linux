@@ -45,6 +45,7 @@ my_download = download()
 
 
 def download_thread_proc():
+    # clear=0: keep cached files to avoid redundant GitHub API calls on each startup
     my_download.download_file(
         "https://api.github.com/repos/hd-zero/hdzero-vtx/releases", "resource/vtx_releases", 0)
     my_download.download_file(

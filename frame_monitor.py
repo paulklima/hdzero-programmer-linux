@@ -3,8 +3,7 @@ from tkinter import ttk
 import ctypes
 import global_var
 import time
-import sys
-from ch341 import windows_driver, linux_driver
+from ch341 import linux_driver
 
 
 class frame_monitor:
@@ -77,10 +76,7 @@ class frame_monitor:
         self.init_osd_setting()
         self.init_reset_button()
 
-        if sys.platform.startswith('linux'):
-            self.dll_object = linux_driver()
-        else:
-            self.dll_object = windows_driver()
+        self.dll_object = linux_driver()
 
         self.dll_object.load()
 
@@ -210,9 +206,9 @@ class frame_monitor:
         self.osd_var.set(False)
 
         self.brightness_label.config(text=f"{int(float(self.brightness_min))}")
-        self.brightness_label.config(text=f"{int(float(self.contrast_min))}")
+        self.contrast_label.config(text=f"{int(float(self.contrast_min))}")
         self.saturation_label.config(text=f"{int(float(self.saturation_min))}")
-        self.backlight_label.config(text=f"{int(float(self.brightness_min))}")
+        self.backlight_label.config(text=f"{int(float(self.backlight_min))}")
 
         self.on_cell_count_scale_changed(self.cell_count_min)
         self.on_warning_cell_voltage_scale_changed(

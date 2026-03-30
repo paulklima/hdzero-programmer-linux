@@ -10,67 +10,7 @@ from tkinter import ttk
 from global_var import *
 from ctypes import *
 import global_var
-import subprocess
 
-
-
-class windows_driver(object):
-    def __init__(self):
-        self.dll = None
-        self.dll_name = "resource\\driver\\CH341DLL.DLL"
-        self.iIndex = 0
-
-    def load(self):
-        try:
-            self.dll = ctypes.WinDLL(self.dll_name)
-        except:
-            command = "resource\\driver\\SETUP.EXE \\S"
-            print("Need to install ch341 driver")
-            print("Installing ...")
-            subprocess.run(command, shell=True, capture_output=True, text=True)
-            print("done")
-            time.sleep(1)
-            try:
-                self.dll = ctypes.WinDLL(self.dll_name)
-            except:
-                a = 1
-
-    def open_device(self):
-        return self.dll.CH341OpenDevice(self.iIndex)
-
-    def close_device(self):
-        self.dll.CH341CloseDevice(self.iIndex)
-
-    def get_version(self):
-        return self.dll.CH341GetVersion()
-
-    def get_driver_version(self):
-        return self.dll.CH341GetDrvVersion()
-
-    def get_chip_version(self):
-        return self.dll.CH341GetVerIC(self.iIndex)
-
-    def set_stream(self, cs):
-        if cs == True:
-            self.dll.CH341SetStream(self.iIndex, 0x80)
-        else:
-            self.dll.CH341SetStream(self.iIndex, 0x81)
-
-    def stream_spi4(self, command, ilength, iobuffer):
-        self.dll.CH341StreamSPI4(
-            self.iIndex, command, ilength, iobuffer)
-
-    def set_output(self, a, b, c):
-        self.dll.CH341SetOutput(self.iIndex, a, b, c)
-
-    def read_I2C(self, device, addr, iobuffer):
-        self.dll.CH341ReadI2C(self.iIndex, device, addr, iobuffer)
-
-    def write_I2C(self, device, addr, byte):
-        self.dll.CH341WriteI2C(self.iIndex, device, addr, byte)
-
-    def set_delay_ms(self, ms):
-        self.dll.CH341SetDelaymS(self.iIndex, ms)
 
 
 
@@ -206,10 +146,7 @@ class ch341_class(object):
         self.buffer_size = 2560
         self.write_buffer = create_string_buffer(self.buffer_size)
 
-        if sys.platform.startswith('linux'):
-            self.dll_object = linux_driver()
-        else:
-            self.dll_object = windows_driver()
+        self.dll_object = linux_driver()
 
         self.dll_object.load()
 
