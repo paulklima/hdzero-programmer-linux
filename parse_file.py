@@ -5,7 +5,6 @@ from PIL import Image
 class parse:
     def __init__(self):
         self.vtx_releases_path = "resource/vtx_releases"
-        self.vtx_cita_releases_path = "resource/vtx_cita_releases"
         self.vtx_common_path = "resource/vtx_common"
         self.event_vrx_releases_path = "resource/event_vrx_releases"
         self.monitor_releases_path = "resource/monitor_releases"
@@ -64,9 +63,6 @@ class parse:
                     version = data[i]['tag_name']
                     url = data[i]['assets'][j]['browser_download_url']
                     self.vtx_info[name][version] = url
-
-            with open(self.vtx_cita_releases_path) as f:
-                data = json.load(f)
 
             for i in range(len(data)):
                 link_list = []

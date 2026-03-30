@@ -5,16 +5,31 @@
 
 #pragma pack(1)
 
+#define CH347_SPI_MAX_FREQ 60e6
+#define CH347_SPI_MIN_FREQ 218750
+
+#define SPI_SLAVE_MAX_LENGTH (4 * 1024 * 1024)
+
+#define IRQ_TYPE_NONE	      0
+#define IRQ_TYPE_EDGE_RISING  1
+#define IRQ_TYPE_EDGE_FALLING 2
+#define IRQ_TYPE_EDGE_BOTH    (IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING)
+
+typedef void (*Isr_Func)(int);
+
 /* SPI setting structure */
 typedef struct _SPI_CONFIG {
-	uint8_t iMode; /* 0-3: SPI Mode0/1/2/3 */
-	uint8_t iClock; /* 0: 60MHz, 1: 30MHz, 2: 15MHz, 3: 7.5MHz, 4: 3.75MHz, 5: 1.875MHz, 6: 937.5KHz，7: 468.75KHz */
+	uint8_t iMode;			/* 0-3: SPI Mode0/1/2/3, BIT7: ch347f SPI role, 0: master, 1: slave */
+	uint8_t iClock;			/* Spi clock gear setting, automatically calculated by functions */
+	uint32_t iSpiSpeedHz;		/* 60MHz Max */
+	uint8_t iClockIndex;		/* 1: 56MHz, 2: 72MHz, 3: 96MHz, 4: 120MHz */
 	uint8_t iByteOrder;		/* 0: LSB, 1: MSB */
 	uint16_t iSpiWriteReadInterval; /* SPI read and write interval, unit: us */
 	uint8_t iSpiOutDefaultData;	/* SPI output data by default while read */
-	uint32_t iChipSelect;		/* SPI chip select, valid while BIT7 is 1, 00: CS0, 01: CS1 */
+	uint16_t iChipSelect;		/* SPI chip select, low 8 bits: CS1, high 8 bits: CS2, valid while BIT7 is 1*/
 	uint8_t CS1Polarity;		/* BIT0：CS1 polar control, 0：low active, 1：high active */
 	uint8_t CS2Polarity;		/* BIT0：CS2 polar control, 0：low active, 1：high active */
+	uint8_t iDataBits;		/* 0: 8bit, 1: 16bit */
 	uint16_t iIsAutoDeativeCS;	/* automatically undo the CS after operation completed */
 	uint16_t iActiveDelay;		/* delay time of read and write operation after setting CS, unit: us */
 	uint32_t iDelayDeactive;	/* delay time of read and write operation after canceling CS, unit: us */
@@ -60,8 +75,10 @@ typedef struct _StreamUSBCFG {
 } StreamHwCfgS, *PStreamHwCfgS;
 
 typedef struct _DEV_INFOR {
-	int fd;		   /* device file descriptor */
+	int fd;		    /* device file descriptor */
+	CHIP_TYPE ChipType; /* chip model */
 	FUNCTYPE FuncType; /* 0: TTY uart device(/dev/tty*), 1: HID device(/dev/hidraw*), 2: Vendor device(/dev/ch34xpis*) */
+	uint8_t UartIndex;
 	char DeviceID[64];	     /* USB\VID_xxxx&PID_xxxx */
 	uint8_t ChipMode;	     /* work mode
                                   0: Mode0(UART0/UART1)
@@ -77,7 +94,7 @@ typedef struct _DEV_INFOR {
 	char ManufacturerString[64]; /* USB manufacturer string */
 	uint32_t WriteTimeout;	     /* USB write timeout */
 	uint32_t ReadTimeout;	     /* USB read timeout */
-	uint8_t FirewareVer;	     /* firmware version */
+	uint16_t FirmwareVer;	     /* firmware version */
 	uint32_t CmdDataMaxSize;
 
 	mSpiCfgS dllUserSpiCfg;
@@ -87,6 +104,7 @@ typedef struct _DEV_INFOR {
 	int MaxBitsPerBulk;
 	int MaxBytesPerBulk;
 
+	Isr_Func isr_routine;
 } mDeviceInforS, *mPDeviceInforS;
 
 #pragma pack()
@@ -213,7 +231,7 @@ extern bool CH347SPI_ChangeCS(int fd, uint8_t iStatus);
  *
  * The function return true if successful, false if fail.
  */
-extern bool CH347SPI_Write(int fd, bool ignoreCS, int iChipSelect, int iLength, int iWriteStep, void *ioBuffer);
+extern bool CH347SPI_Write(int fd, bool ignoreCS, uint8_t iChipSelect, int iLength, int iWriteStep, void *ioBuffer);
 
 /**
  * CH347SPI_Read - read SPI data
@@ -226,7 +244,7 @@ extern bool CH347SPI_Write(int fd, bool ignoreCS, int iChipSelect, int iLength, 
  *
  * The function return true if successful, false if fail.
  */
-extern bool CH347SPI_Read(int fd, bool ignoreCS, int iChipSelect, int iLength, uint32_t *oLength, void *ioBuffer);
+extern bool CH347SPI_Read(int fd, bool ignoreCS, uint8_t iChipSelect, int iLength, uint32_t *oLength, void *ioBuffer);
 
 /**
  * CH347SPI_WriteRead - write then read SPI data
@@ -238,7 +256,42 @@ extern bool CH347SPI_Read(int fd, bool ignoreCS, int iChipSelect, int iLength, u
  *
  * The function return true if successful, false if fail.
  */
-extern bool CH347SPI_WriteRead(int fd, bool ignoreCS, int iChipSelect, int iLength, void *ioBuffer);
+extern bool CH347SPI_WriteRead(int fd, bool ignoreCS, uint8_t iChipSelect, int iLength, void *ioBuffer);
+
+/**
+ * CH347SPI_Slave_Control - switch of reading SPI data from master 
+ * @fd: file descriptor of device
+ * @enable: true: start reading continuously, false: stop reading
+ *
+ * The function return true if successful, false if fail.
+ */
+extern bool CH347SPI_Slave_Control(int fd, bool enable);
+
+/**
+ * CH347SPI_Slave_QweryData - get spi data length
+ * @fd: file descriptor of device
+ * @oLength: pointer to read length
+ *
+ * The function return true if successful, false if fail.
+ */
+extern bool CH347SPI_Slave_QweryData(int fd, uint32_t *oLength);
+
+/**
+ * CH347SPI_Slave_FIFOReset - reset spi data fifo
+ * @fd: file descriptor of device
+ *
+ * The function return true if successful, false if fail.
+ */
+extern bool CH347SPI_Slave_FIFOReset(int fd);
+/**
+ * CH347SPI_Slave_ReadData - read spi data in slave mode
+ * @fd: file descriptor of device
+ * @oReadBuffer: pointer to read buffer
+ * @oReadLength: pointer to read length
+ *
+ * The function return true if successful, false if fail.
+ */
+extern bool CH347SPI_Slave_ReadData(int fd, void *oReadBuffer, uint32_t *oReadLength);
 
 /**
  * CH347Jtag_INIT - JTGA interface initialization, mode and speed setting
@@ -410,6 +463,18 @@ extern bool CH347GPIO_Get(int fd, uint8_t *iDir, uint8_t *iData);
 extern bool CH347GPIO_Set(int fd, uint8_t iEnable, uint8_t iSetDirOut, uint8_t iSetDataOut);
 
 /**
+ * CH347GPIO_IRQ_Set - gpio irq function setting
+ * @fd: file descriptor of device
+ * @gpioindex: gpio index number, 0-7 valid
+ * @enable:  0 : disable, 1 : enable
+ * @irqtype: IRQ_TYPE_EDGE_FALLING, IRQ_TYPE_EDGE_RISING, IRQ_TYPE_EDGE_BOTH
+ * @isr_handler: handler to call when interrupt occurs, if isr disable, the routine will be ignored.
+ *
+ * The function return true if success, others if fail.
+ */
+extern bool CH347GPIO_IRQ_Set(int fd, uint8_t gpioindex, bool enable, uint8_t irqtype, void *isr_handler);
+
+/**
  * CH347Uart_Open - open device
  * @pathname: device path in /dev directory
  *
@@ -503,16 +568,29 @@ extern bool CH347Uart_Write(int fd, void *iBuffer, uint32_t *ioLength);
  * CH347I2C_Set - configure i2c interface in stream mode
  * @fd: file descriptor of device
  * @iMode: stream mode
- * ->bit0~1: set I2C SCL rate
- * 			   --> 00 :	low rate 20KHz
- * 			   --> 01 : standard rate 100KHz
- * 			   --> 10 : fast rate 400KHz
- * 			   --> 11 : high rate 750KHz
+ * ->bit0~2: set I2C SCL rate
+ * 			   --> 000 : low rate 20KHz
+ * 			   --> 001 : standard rate 100KHz
+ * 			   --> 010 : fast rate 400KHz
+ * 			   --> 011 : high rate 750KHz
+ * 			   --> 100 : rate 50KHz
+ * 			   --> 101 : standard rate 200KHz
+ * 			   --> 110 : fast rate 1MHz
+ * 			   --> 111 : high rate 2.4MHz
  * other bits must keep 0
  *
  * The function return true if successful, false if fail.
  */
-extern bool CH347I2C_Set(int fd, int iMode);
+extern bool CH347I2C_Set(int fd, uint8_t iMode);
+
+/**
+ * CH347I2C_SetStretch - I2C Clock Stretch function control
+ * @fd: file descriptor of device
+ * @enable: I2C Clock Stretch enable, 1 : enable, 0 : disable
+ *
+ * The function return true if successful, false if fail.
+ */
+extern bool CH347I2C_SetStretch(int fd, bool enable);
 
 /**
  * CH347I2C_SetDelaymS - delay operation
@@ -534,6 +612,19 @@ extern bool CH347I2C_SetDelaymS(int fd, int iDelay);
  * The function return true if successful, false if fail.
  */
 extern bool CH347StreamI2C(int fd, int iWriteLength, void *iWriteBuffer, int iReadLength, void *oReadBuffer);
+
+/**
+ * CH347StreamI2C_RetAck - write/read i2c in stream mode
+ * @fd: file descriptor of device
+ * @iWriteLength: write length
+ * @iWriteBuffer: pointer to write buffer
+ * @iReadLength: read length
+ * @oReadBuffer: pointer to read buffer
+ * @retAck: pointer to available ack count
+ *
+ * The function return true if successful, false if fail.
+ */
+extern bool CH347StreamI2C_RetAck(int fd, int iWriteLength, void *iWriteBuffer, int iReadLength, void *oReadBuffer, int *retAck);
 
 /**
  * CH347ReadEEPROM - read data from eeprom

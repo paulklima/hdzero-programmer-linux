@@ -89,7 +89,10 @@ class linux_driver(object):
 
     def open_device(self):
         # Return first entry. The device number could be different on various systems.
-        device = glob.glob('/dev/ch34x_pis[0-9]*')[0]
+        devices = glob.glob('/dev/ch34x_pis[0-9]*')
+        if not devices:
+            return -1
+        device = devices[0]
         self.iIndex = self.dll.CH34xOpenDevice(device.encode())
         return self.iIndex
 

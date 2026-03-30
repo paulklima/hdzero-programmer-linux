@@ -19,7 +19,8 @@ typedef enum _EEPROM_TYPE {
 
 typedef enum _CHIP_TYPE {
 	CHIP_CH341 = 0,
-	CHIP_CH347
+	CHIP_CH347T = 1,
+	CHIP_CH347F = 2,
 } CHIP_TYPE;
 
 typedef enum {
@@ -65,11 +66,11 @@ extern bool CH34x_GetChipVersion(int fd, unsigned char *Version);
 /**
  * CH34x_GetChipType - get chip type
  * @fd: file descriptor of device
- * @Version: pointer to type
+ * @ChipType: pointer to chip type
  *
  * The function return true if successful, false if fail.
  */
-extern bool CH34x_GetChipType(int fd, unsigned char *ChipType);
+extern bool CH34x_GetChipType(int fd, CHIP_TYPE *ChipType);
 
 /**
  * CH34X_GetDeviceID - get device vid and pid
@@ -275,8 +276,21 @@ extern bool CH34xWriteRead(int fd, uint32_t iWriteLength, void *iWriteBuffer, ui
 			   uint32_t *oReadLength, void *oReadBuffer);
 
 /**
+ * CH34xGetInput - get io status of CH341
+ * @fd: file descriptor of device
+ * @iStatus: pointer to io status
+ * Note:
+ * Bit7~Bit0<==>D7-D0, Bit8<==>ERR#, Bit9<==>PEMP, Bit10<==>INT#
+ * Bit11<==>SLCT, Bit13<==>WAIT#, Bit14<==>DATAS#/READ#, Bit15<==>ADDRS#/ADDR/ALE, Bit23<==>SDA
+ *
+ * The function return true if successful, false if fail.
+ */
+extern bool CH34xGetInput(int fd, uint32_t *iStatus);
+
+/**
  * CH34xSetOutput - set direction and output data of CH341
- * @iEnbale: set direction and data enable
+ * @fd: file descriptor of device
+ * @iEnable: set direction and data enable
  * 			   --> Bit16 High :	effect on Bit15~8 of iSetDataOut
  * 			   --> Bit17 High :	effect on Bit15~8 of iSetDirOut
  * 			   --> Bit18 High :	effect on Bit7~0 of iSetDataOut
